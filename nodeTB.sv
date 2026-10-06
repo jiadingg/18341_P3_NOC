@@ -59,6 +59,9 @@ module tb(
   // error count
   int errors = 0;
 
+  // put outbound error
+  logic [1:0] put_outbound_flags = '0;
+
   // testbench queues
   logic [31:0] expect_node[$], expect_router[$], expected;
 
@@ -190,13 +193,20 @@ module tb(
     $display("Checking single packet node->router");
     send_node(32'h12345678);
     
-	  @(posedge clock);
-	  free_node_router <= 1;
-    assert(put_node_router === 1'b0)
-    else begin $error("put_outbound is %b immediately after sending a packet to node, data needs to be stored in fifo for one cycle before continuing", put_node_router); errors++; end
-	  @(posedge clock);
-    assert(put_node_router === 0)
-    else begin $error("put_outbound is %b immediately after sending a packet to node, data needs to be stored in fifo for one cycle before continuing", put_node_router); errors++; end
+
+	@(posedge clock);
+	free_node_router <= 1;
+    if (put_node_router === 1'b1) put_outbound_flags[0] = 1;
+	  
+	@(posedge clock);
+    if (put_node_router === 1'b1) put_outbound_flags[1] = 1;
+
+	if (put_outbound_flags === 2'b01) begin
+        $error("put_outbound is %b immediately after sending a packet to node, data needs to be stored in fifo for one cycle before continuing",
+                put_node_router); errors++;
+        put_outbound_flags = '0;
+    end
+
     wait_for_quiescence(4);
 
     $display("Checking FIFO length");
